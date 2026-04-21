@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import SlotMachinePage from './pages/SlotMachinePage'
 
 type GameCardProps = {
   title: string
@@ -107,6 +108,11 @@ const simonTiles: SimonTile[] = [
   },
 ]
 
+function getRandomSimonTileId(): SimonTileId {
+  const index = Math.floor(Math.random() * simonTiles.length)
+  return simonTiles[index].id
+}
+
 function SimonPage() {
   const [score, setScore] = useState(0)
   const [sequence, setSequence] = useState<SimonTileId[]>([])
@@ -128,11 +134,6 @@ function SimonPage() {
   function clearTimers() {
     timeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
     timeoutsRef.current = []
-  }
-
-  function randomTile(): SimonTileId {
-    const index = Math.floor(Math.random() * simonTiles.length)
-    return simonTiles[index].id
   }
 
   function flashTile(tileId: SimonTileId, delay = 0) {
@@ -169,7 +170,7 @@ function SimonPage() {
 
   function startRound(baseSequence?: SimonTileId[]) {
     const sourceSequence = baseSequence ?? []
-    const nextSequence = [...sourceSequence, randomTile()]
+    const nextSequence = [...sourceSequence, getRandomSimonTileId()]
     setSequence(nextSequence)
     playSequence(nextSequence)
   }
@@ -301,28 +302,12 @@ function SimonPage() {
   )
 }
 
-function EmptyRoute({ title }: { title: string }) {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-[#252423] px-6 text-[#f0e2cb]">
-      <section className="rounded-[2rem] border border-white/10 px-10 py-12 text-center">
-        <h1 className="text-4xl font-black uppercase tracking-[0.08em]">
-          {title}
-        </h1>
-        <p className="mt-4 text-lg text-white/70">Ruta vacia por ahora.</p>
-      </section>
-    </main>
-  )
-}
-
 function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/simon" element={<SimonPage />} />
-      <Route
-        path="/slotmachine"
-        element={<EmptyRoute title="Slot Machine" />}
-      />
+      <Route path="/slotmachine" element={<SlotMachinePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
