@@ -4,6 +4,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
+import { Link } from 'react-router-dom'
 
 type SlotSymbolId =
   | 'salud-bienestar'
@@ -241,6 +242,16 @@ function SlotMachinePage() {
       />
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-[1120px] flex-col items-center justify-center">
+        <div className="mb-10 flex w-full">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-3 rounded-full border border-white/10 px-6 py-4 text-lg font-extrabold uppercase tracking-[0.08em] text-[#f0e2cb] transition-colors hover:border-white/20 hover:bg-white/4"
+          >
+            <span className="text-3xl leading-none">{'<'}</span>
+            Volver
+          </Link>
+        </div>
+
         <header className="mb-5 text-center sm:mb-6">
           <h1
             className="text-[clamp(3rem,7vw,4.15rem)] font-black uppercase leading-none tracking-[0.05em] text-[#ff4d28]"
