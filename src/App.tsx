@@ -221,9 +221,9 @@ function SimonPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_72%_48%,rgba(255,255,255,0.03),transparent_24%),#252423] px-6 py-8 text-[#f0e2cb] lg:px-14 lg:py-11">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[1450px] flex-col">
-        <div className="mb-10 flex">
+    <main className="simon-page relative min-h-[100dvh] overflow-hidden bg-[radial-gradient(circle_at_72%_48%,rgba(255,255,255,0.03),transparent_24%),#252423] px-5 py-6 text-[#f0e2cb] sm:px-6 sm:py-8 lg:px-14 lg:py-11">
+      <div className="simon-shell mx-auto flex w-full max-w-[1450px] flex-col">
+        <div className="simon-back-wrap mb-8 flex md:mb-10">
           <Link
             to="/"
             className="inline-flex items-center gap-3 rounded-full border border-white/10 px-6 py-4 text-lg font-extrabold uppercase tracking-[0.08em] text-[#f0e2cb] transition-colors hover:border-white/20 hover:bg-white/4"
@@ -233,22 +233,22 @@ function SimonPage() {
           </Link>
         </div>
 
-        <section className="flex flex-1 flex-col justify-center gap-12 md:gap-10 lg:flex-row lg:items-center lg:justify-between xl:gap-14">
-          <div className="flex min-h-[520px] max-w-[480px] flex-col lg:max-w-[360px] xl:max-w-[480px]">
-            <h1 className="mb-8 text-[clamp(3.2rem,5vw,5.8rem)] font-black uppercase leading-none tracking-tight text-[#ff4a2e] xl:mb-10">
+        <section className="simon-stage flex flex-1 flex-col items-center justify-center gap-10 md:gap-10 xl:flex-row xl:items-center xl:justify-between xl:gap-14">
+          <div className="simon-panel flex w-full max-w-[480px] flex-col items-start">
+            <h1 className="simon-title mb-6 text-[clamp(3.2rem,5vw,5.8rem)] font-black uppercase leading-none tracking-tight text-[#ff4a2e] md:mb-8 xl:mb-10">
               Simon
             </h1>
 
-            <div className="mb-8 flex min-h-[170px] w-[320px] min-w-[320px] max-w-[320px] flex-col rounded-[2rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.05)] md:w-[355px] md:min-w-[355px] md:max-w-[355px] xl:mb-12 xl:min-h-[190px] xl:px-7 xl:py-6">
+            <div className="simon-score-card mb-6 flex w-full max-w-[355px] flex-col rounded-[2rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.05)] md:mb-8 xl:mb-10 xl:px-7 xl:py-6">
               <span className="text-[0.9rem] font-bold uppercase tracking-[0.18em] text-[#cabda7] xl:text-[1rem]">
                 Secuencias Correctas
               </span>
-              <div className="flex h-[96px] w-[180px] min-w-[180px] self-center items-center justify-center text-[4.4rem] font-black leading-none text-[#ff4a2e] tabular-nums md:h-[108px] md:w-[210px] md:min-w-[210px] md:text-[5rem] xl:h-[120px] xl:w-[230px] xl:min-w-[230px] xl:text-[5.5rem]">
+              <div className="simon-score-value flex self-center items-center justify-center text-[4.4rem] font-black leading-none text-[#ff4a2e] tabular-nums md:text-[5rem] xl:text-[5.5rem]">
                 {score}
               </div>
             </div>
 
-            <p className="mb-8 min-h-[84px] max-w-[340px] text-[0.95rem] font-medium uppercase leading-[1.4] text-[#dccaa9] md:max-w-[360px] xl:mb-12 xl:min-h-[92px] xl:text-[1.05rem]">
+            <p className="simon-message mb-6 max-w-[355px] text-[0.95rem] font-medium uppercase leading-[1.4] text-[#dccaa9] md:mb-8 xl:mb-10 xl:text-[1.05rem]">
               {message}
             </p>
 
@@ -256,14 +256,14 @@ function SimonPage() {
               type="button"
               onClick={handleStart}
               disabled={isPlayingSequence}
-              className="mt-auto inline-flex h-[60px] min-w-[240px] items-center justify-center rounded-[1.35rem] bg-gradient-to-b from-[#ff4b3c] to-[#ff120d] px-8 text-[1rem] font-black uppercase tracking-[0.08em] text-white shadow-[0_18px_36px_rgba(255,40,20,0.26),inset_0_1px_0_rgba(255,255,255,0.28)] transition-transform duration-200 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-75 md:h-[64px] md:min-w-[255px] xl:h-[68px] xl:min-w-[275px] xl:px-10 xl:text-[1.1rem]"
+              className="simon-start-button inline-flex h-[60px] w-full max-w-[275px] items-center justify-center rounded-[1.35rem] bg-gradient-to-b from-[#ff4b3c] to-[#ff120d] px-8 text-[1rem] font-black uppercase tracking-[0.08em] text-white shadow-[0_18px_36px_rgba(255,40,20,0.26),inset_0_1px_0_rgba(255,255,255,0.28)] transition-transform duration-200 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-75 md:h-[64px] xl:h-[68px] xl:px-10 xl:text-[1.1rem]"
             >
               {hasStarted ? 'Reiniciar' : 'Comenzar'}
             </button>
           </div>
 
-          <div className="flex justify-center lg:flex-1 lg:justify-end">
-            <div className="relative flex h-[min(68vw,460px)] w-[min(68vw,460px)] items-center justify-center rounded-full border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-[4.8%] shadow-[0_35px_90px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.05)] md:h-[min(52vw,500px)] md:w-[min(52vw,500px)] lg:h-[min(50vw,430px)] lg:w-[min(50vw,430px)] xl:h-[min(76vw,560px)] xl:w-[min(76vw,560px)]">
+          <div className="simon-board-wrap flex w-full justify-center xl:flex-1 xl:justify-end">
+            <div className="simon-board-frame relative flex items-center justify-center rounded-full border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-[4.8%] shadow-[0_35px_90px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.05)]">
               <div className="grid h-full w-full grid-cols-2 grid-rows-2 gap-[4.5%] rounded-full bg-[#2f2e2c] p-[4.5%]">
                 {simonTiles.map((tile) => {
                   const isActive = activeTile === tile.id

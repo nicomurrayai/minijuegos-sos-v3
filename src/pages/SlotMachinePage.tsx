@@ -1,25 +1,34 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type FormEvent,
 } from 'react'
+import { useMutation } from 'convex/react'
 import { Link } from 'react-router-dom'
+import { api } from '../../convex/_generated/api'
+import {
+  SLOT_GAME_ID,
+  createLosingSymbolIds,
+  getPrizeById,
+  pickWeightedPrize,
+  type SlotPrizeConfig,
+  type SlotPrizeId,
+} from '../shared/slotConfig'
+import { isValidEmail, normalizeEmail } from '../lib/email'
+import {
+  flushQueuedSlotLeads,
+  persistSlotLead,
+} from '../lib/slotPersistence'
+import { useSlotSettings } from '../lib/useSlotSettings'
 
-type SlotSymbolId =
-  | 'salud-bienestar'
-  | 'hogar'
-  | 'movilidad'
-  | 'multiasistencia'
-
-type SlotSymbol = {
-  id: SlotSymbolId
-  alt: string
-  imageSrc: string
-  labelLines: string[]
-}
+type SlotSymbolId = SlotPrizeId
+type SlotSymbol = SlotPrizeConfig
 
 type SpinOutcome = 'idle' | 'win' | 'lose'
+type SaveStatus = 'idle' | 'queued' | 'saved'
 
 type ResultPopup = {
   body: string
@@ -33,39 +42,6 @@ type ReelState = {
   strip: SlotSymbolId[]
   visibleSymbolId: SlotSymbolId
 }
-
-const slotSymbols: SlotSymbol[] = [
-  {
-    id: 'salud-bienestar',
-    alt: 'Icono Salud y Bienestar',
-    imageSrc: '/slot-salud-bienestar.png',
-    labelLines: ['Salud y', 'Bienestar'],
-  },
-  {
-    id: 'hogar',
-    alt: 'Icono Hogar',
-    imageSrc: '/slot-hogar.png',
-    labelLines: ['Hogar'],
-  },
-  {
-    id: 'movilidad',
-    alt: 'Icono Movilidad',
-    imageSrc: '/slot-movilidad.png',
-    labelLines: ['Movilidad'],
-  },
-  {
-    id: 'multiasistencia',
-    alt: 'Icono Multiasistencia',
-    imageSrc: '/slot-multiasistencia.png',
-    labelLines: ['Multiasistencia'],
-  },
-]
-
-const slotSymbolIds = slotSymbols.map((symbol) => symbol.id)
-
-const slotSymbolsById = Object.fromEntries(
-  slotSymbols.map((symbol) => [symbol.id, symbol]),
-) as Record<SlotSymbolId, SlotSymbol>
 
 const initialVisibleSymbols: SlotSymbolId[] = [
   'multiasistencia',
@@ -85,15 +61,11 @@ function createIdleReel(symbolId: SlotSymbolId): ReelState {
   }
 }
 
-function randomSymbolId(): SlotSymbolId {
-  const index = Math.floor(Math.random() * slotSymbolIds.length)
-  return slotSymbolIds[index]
-}
-
 function buildSpinStrip(
   currentSymbolId: SlotSymbolId,
   finalSymbolId: SlotSymbolId,
   reelIndex: number,
+  slotSymbolIds: SlotSymbolId[],
 ): SlotSymbolId[] {
   const strip: SlotSymbolId[] = [currentSymbolId]
   const steps = 17 + reelIndex * 4 + Math.floor(Math.random() * 4)
@@ -109,13 +81,41 @@ function buildSpinStrip(
   return strip
 }
 
+function getLabelLines(label: string) {
+  if (label.includes(' y ')) {
+    return label
+      .split(' y ')
+      .map((line, index) => (index === 0 ? `${line} y` : line))
+  }
+
+  return [label]
+}
+
 function SlotMachinePage() {
+  const createLead = useMutation(api.leads.createLead)
+  const { isLoading, isUsingCache, settings } = useSlotSettings()
+  const slotSymbols = settings.prizes
+  const slotSymbolIds = useMemo(
+    () => slotSymbols.map((symbol) => symbol.id),
+    [slotSymbols],
+  )
+  const slotSymbolsById = useMemo(
+    () =>
+      Object.fromEntries(slotSymbols.map((symbol) => [symbol.id, symbol])) as
+        Record<SlotSymbolId, SlotSymbol>,
+    [slotSymbols],
+  )
   const [reels, setReels] = useState<ReelState[]>(() =>
     initialVisibleSymbols.map(createIdleReel),
   )
   const [isSpinning, setIsSpinning] = useState(false)
   const [lastOutcome, setLastOutcome] = useState<SpinOutcome>('idle')
   const [resultPopup, setResultPopup] = useState<ResultPopup | null>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [playerEmail, setPlayerEmail] = useState('')
+  const [emailDraft, setEmailDraft] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(true)
   const [resultMessage, setResultMessage] = useState(
     'Tirá de la palanca para empezar.',
   )
@@ -134,6 +134,20 @@ function SlotMachinePage() {
   }, [])
 
   useEffect(() => {
+    void flushQueuedSlotLeads(createLead)
+
+    function handleOnline() {
+      void flushQueuedSlotLeads(createLead)
+    }
+
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [createLead])
+
+  useEffect(() => {
     if (!resultPopup) {
       return
     }
@@ -141,6 +155,13 @@ function SlotMachinePage() {
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setResultPopup(null)
+        setSaveStatus('idle')
+        setPlayerEmail('')
+        setEmailDraft('')
+        setEmailError('')
+        setIsEmailModalOpen(true)
+        setLastOutcome('idle')
+        setResultMessage('Tirá de la palanca para empezar.')
       }
     }
 
@@ -161,16 +182,28 @@ function SlotMachinePage() {
     }
   }
 
-  function handleSpin() {
-    if (spinningRef.current) {
+  function dismissResultPopup() {
+    setResultPopup(null)
+    setSaveStatus('idle')
+    setPlayerEmail('')
+    setEmailDraft('')
+    setEmailError('')
+    setIsEmailModalOpen(true)
+    setLastOutcome('idle')
+    setResultMessage('Tirá de la palanca para empezar.')
+  }
+
+  function startSpin(email: string) {
+    if (spinningRef.current || isLoading) {
       return
     }
 
     clearScheduledWork()
 
-    const finalSymbols = Array.from({ length: reels.length }, () =>
-      randomSymbolId(),
-    )
+    const winningPrize = pickWeightedPrize(slotSymbols)
+    const finalSymbols = winningPrize
+      ? Array.from({ length: reels.length }, () => winningPrize.id)
+      : createLosingSymbolIds(slotSymbols, reels.length)
     const preparedReels = reels.map((reel, reelIndex) => ({
       durationMs: 0,
       offset: 0,
@@ -178,6 +211,7 @@ function SlotMachinePage() {
         reel.visibleSymbolId,
         finalSymbols[reelIndex],
         reelIndex,
+        slotSymbolIds,
       ),
       visibleSymbolId: reel.visibleSymbolId,
     }))
@@ -186,6 +220,7 @@ function SlotMachinePage() {
     setIsSpinning(true)
     setLastOutcome('idle')
     setResultPopup(null)
+    setSaveStatus('idle')
     setResultMessage('Girando...')
     setReels(preparedReels)
 
@@ -205,29 +240,75 @@ function SlotMachinePage() {
       baseSpinDurationMs + (reels.length - 1) * reelStaggerMs + 140
 
     const settleId = window.setTimeout(() => {
-      const didWin = finalSymbols.every(
-        (symbolId) => symbolId === finalSymbols[0],
-      )
+      const didWin = winningPrize !== null
+      const prizeLabel = winningPrize?.label ?? null
 
       spinningRef.current = false
       setIsSpinning(false)
       setLastOutcome(didWin ? 'win' : 'lose')
       setResultMessage(
         didWin
-          ? 'Premio SOS. Salieron tres iguales.'
+          ? `Premio: ${prizeLabel}. Salieron tres iguales.`
           : 'No hubo premio. Probá otra vez.',
       )
       setResultPopup({
         body: didWin
-          ? 'La tirada termino con un resultado ganador.'
-          : 'La tirada termino sin premio en esta ocasion.',
+          ? `La tirada terminó con premio: ${prizeLabel}.`
+          : 'La tirada terminó sin premio en esta ocasión.',
         title: 'Resultado',
         tone: didWin ? 'win' : 'lose',
       })
       setReels(finalSymbols.map(createIdleReel))
+
+      void persistSlotLead(createLead, {
+        createdAt: Date.now(),
+        email,
+        game: SLOT_GAME_ID,
+        isWinner: didWin,
+        prize: prizeLabel,
+        prizeId: winningPrize?.id ?? null,
+        prizeLabel,
+        symbols: finalSymbols,
+      }).then((status) => {
+        setSaveStatus(status)
+      })
     }, settleDelay)
 
     timeoutsRef.current.push(settleId)
+  }
+
+  function handleSpin() {
+    if (spinningRef.current || isLoading) {
+      return
+    }
+
+    if (!playerEmail) {
+      setIsEmailModalOpen(true)
+      return
+    }
+
+    startSpin(playerEmail)
+  }
+
+  function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (isLoading) {
+      setEmailError('El sistema esta cargando la configuracion.')
+      return
+    }
+
+    const normalizedEmail = normalizeEmail(emailDraft)
+
+    if (!isValidEmail(normalizedEmail)) {
+      setEmailError('Ingresa un email valido para jugar.')
+      return
+    }
+
+    setPlayerEmail(normalizedEmail)
+    setEmailError('')
+    setIsEmailModalOpen(false)
+    startSpin(normalizedEmail)
   }
 
   return (
@@ -266,7 +347,11 @@ function SlotMachinePage() {
             className="mt-2 text-[clamp(1.05rem,2.2vw,1.4rem)] font-bold uppercase tracking-[0.03em] text-[#ab9d84]"
             style={{ fontFamily: "'Trebuchet MS', 'Gill Sans', sans-serif" }}
           >
-            Tirá de la palanca
+            {isLoading
+              ? 'Cargando configuración'
+              : isUsingCache
+                ? 'Modo offline listo'
+                : 'Tirá de la palanca'}
           </p>
         </header>
 
@@ -317,7 +402,9 @@ function SlotMachinePage() {
                         >
                           <div className="slot-reel-track" style={trackStyle}>
                             {reel.strip.map((symbolId, symbolIndex) => {
-                              const symbol = slotSymbolsById[symbolId]
+                              const symbol =
+                                slotSymbolsById[symbolId] ??
+                                getPrizeById(slotSymbols, symbolId)
 
                               return (
                                 <div
@@ -326,7 +413,7 @@ function SlotMachinePage() {
                                 >
                                   <img
                                     src={symbol.imageSrc}
-                                    alt={symbol.alt}
+                                    alt={`Icono ${symbol.label}`}
                                     className="h-[clamp(4.9rem,11vw,6.6rem)] w-auto object-contain sm:h-[clamp(5.5rem,10vw,7.2rem)]"
                                     draggable="false"
                                   />
@@ -340,7 +427,7 @@ function SlotMachinePage() {
                                         '0 2px 10px rgba(0, 0, 0, 0.45)',
                                     }}
                                   >
-                                    {symbol.labelLines.map((line) => (
+                                    {getLabelLines(symbol.label).map((line) => (
                                       <span key={line}>{line}</span>
                                     ))}
                                   </span>
@@ -363,7 +450,7 @@ function SlotMachinePage() {
               <button
                 type="button"
                 onClick={handleSpin}
-                disabled={isSpinning}
+                disabled={isSpinning || isLoading}
                 aria-label="Girar slot machine con la palanca"
                 className="group relative flex h-[12rem] w-[4.6rem] items-end justify-center overflow-visible rounded-full bg-transparent outline-none transition-transform duration-200 hover:scale-[1.02] focus-visible:scale-[1.02] focus-visible:ring-2 focus-visible:ring-[#ff6d3f] focus-visible:ring-offset-4 focus-visible:ring-offset-[#252423] disabled:cursor-not-allowed disabled:opacity-90 sm:h-[12.7rem] sm:w-[4.9rem]"
               >
@@ -385,7 +472,7 @@ function SlotMachinePage() {
               <button
                 type="button"
                 onClick={handleSpin}
-                disabled={isSpinning}
+                disabled={isSpinning || isLoading}
                 aria-label="Girar slot machine con el boton lateral"
                 className="relative h-[2.7rem] w-[2.7rem] rounded-full bg-[#6f788b] shadow-[0_0_0_3px_rgba(189,197,212,0.22),0_12px_24px_rgba(0,0,0,0.3)] transition-transform duration-200 hover:scale-[1.04] focus-visible:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c7d1e3] focus-visible:ring-offset-4 focus-visible:ring-offset-[#252423] disabled:cursor-not-allowed disabled:opacity-70 sm:h-[2.95rem] sm:w-[2.95rem]"
               >
@@ -413,10 +500,82 @@ function SlotMachinePage() {
         </div>
       </div>
 
+      {isEmailModalOpen && !resultPopup ? (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/66 px-5 py-8 backdrop-blur-[4px]">
+          <form
+            onSubmit={handleEmailSubmit}
+            className="w-full max-w-[28rem] rounded-[2rem] border border-white/10 bg-[#2d2b29] px-6 py-7 text-center text-[#f5ead9] shadow-[0_32px_100px_rgba(0,0,0,0.52),inset_0_1px_0_rgba(255,255,255,0.06)] sm:px-8 sm:py-8"
+          >
+            <span className="mb-4 inline-flex rounded-full bg-[#ff5a31]/14 px-4 py-2 text-[0.78rem] font-black uppercase tracking-[0.16em] text-[#ff9d78]">
+              Slot Machine
+            </span>
+            <h2
+              className="text-[clamp(2rem,8vw,2.75rem)] font-black uppercase leading-none tracking-[0.03em] text-[#ff5a31]"
+              style={{
+                fontFamily:
+                  "'Impact', 'Haettenschweiler', 'Arial Narrow Bold', sans-serif",
+              }}
+            >
+              Ingresá tu email
+            </h2>
+            <p
+              className="mx-auto mt-3 max-w-[22rem] text-[0.96rem] font-bold leading-6 text-[#d8cab5]"
+              style={{ fontFamily: "'Trebuchet MS', 'Gill Sans', sans-serif" }}
+            >
+              Lo usamos para registrar tu jugada y activar el giro.
+            </p>
+
+            <label htmlFor="slot-email" className="sr-only">
+              Email
+            </label>
+            <input
+              id="slot-email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              value={emailDraft}
+              onChange={(event) => {
+                setEmailDraft(event.target.value)
+                setEmailError('')
+              }}
+              placeholder="tu@email.com"
+              className="mt-6 h-[4.35rem] w-full rounded-[1.25rem] border border-white/10 bg-[#1f1e1d] px-5 text-center text-[1.2rem] font-black text-white shadow-[inset_0_2px_12px_rgba(0,0,0,0.35)] outline-none transition-colors placeholder:text-[#8d8375] focus:border-[#ff7149] focus:ring-2 focus:ring-[#ff7149]/24"
+            />
+            <div className="mt-3 min-h-[1.5rem]">
+              {emailError ? (
+                <p className="text-[0.92rem] font-black text-[#ff9a73]">
+                  {emailError}
+                </p>
+              ) : isUsingCache ? (
+                <p className="text-[0.82rem] font-bold uppercase tracking-[0.08em] text-[#cbbda7]">
+                  Configuración local activa
+                </p>
+              ) : null}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="mt-4 inline-flex h-[4rem] w-full items-center justify-center rounded-[1.25rem] bg-gradient-to-b from-[#ff6b42] to-[#ff2d20] px-6 text-[1.05rem] font-black uppercase tracking-[0.08em] text-white shadow-[0_18px_34px_rgba(255,65,34,0.3),inset_0_1px_0_rgba(255,255,255,0.24)] transition-transform duration-200 hover:scale-[1.01] focus-visible:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff9c79] focus-visible:ring-offset-4 focus-visible:ring-offset-[#2d2b29] disabled:cursor-wait disabled:opacity-70"
+            >
+              {isLoading ? 'Cargando...' : 'Jugar ahora'}
+            </button>
+
+            <Link
+              to="/"
+              className="mt-5 inline-flex min-h-[2.75rem] items-center justify-center px-4 text-[0.9rem] font-black uppercase tracking-[0.08em] text-[#b9ad9b] transition-colors hover:text-white"
+            >
+              Volver al inicio
+            </Link>
+          </form>
+        </div>
+      ) : null}
+
       {resultPopup ? (
         <div
           className="absolute inset-0 z-30 flex items-center justify-center bg-black/58 px-5 backdrop-blur-[3px]"
-          onClick={() => setResultPopup(null)}
+          onClick={dismissResultPopup}
         >
           <div
             role="dialog"
@@ -452,9 +611,16 @@ function SlotMachinePage() {
             >
               {resultPopup.body}
             </p>
+            {saveStatus !== 'idle' ? (
+              <p className="mt-4 rounded-full bg-white/6 px-4 py-2 text-[0.78rem] font-bold uppercase tracking-[0.08em] text-[#d8ccb6]">
+                {saveStatus === 'saved'
+                  ? 'Participación registrada'
+                  : 'Guardado local para sincronizar'}
+              </p>
+            ) : null}
             <button
               type="button"
-              onClick={() => setResultPopup(null)}
+              onClick={dismissResultPopup}
               className="mt-6 inline-flex h-[3rem] min-w-[9rem] items-center justify-center rounded-full bg-[#ff5a31] px-5 text-[0.95rem] font-black uppercase tracking-[0.06em] text-white shadow-[0_12px_24px_rgba(255,90,49,0.26)] transition-transform duration-200 hover:scale-[1.02] focus-visible:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff8f6f] focus-visible:ring-offset-4 focus-visible:ring-offset-[#252423]"
             >
               Cerrar
