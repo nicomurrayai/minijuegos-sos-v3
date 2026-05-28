@@ -1,4 +1,5 @@
 export const SLOT_GAME_ID = 'slotmachine' as const
+export const SLOT_DISABLED_EMAIL_FALLBACK = 'desactivado' as const
 
 export const slotPrizeIds = [
   'salud-bienestar',

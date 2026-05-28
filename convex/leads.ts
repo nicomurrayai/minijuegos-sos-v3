@@ -1,6 +1,7 @@
 import { mutation, query } from './_generated/server'
 import { v } from 'convex/values'
 import {
+  SLOT_DISABLED_EMAIL_FALLBACK,
   SLOT_GAME_ID,
   calculateTotalProbability,
   normalizeSlotPrizes,
@@ -19,6 +20,10 @@ const slotPrizeValidator = v.object({
 
 function assertEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase()
+  if (normalizedEmail === SLOT_DISABLED_EMAIL_FALLBACK) {
+    return SLOT_DISABLED_EMAIL_FALLBACK
+  }
+
   const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
 
   if (!isValid) {

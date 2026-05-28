@@ -1,12 +1,6 @@
 import type { SlotLeadPayload } from '../shared/slotConfig'
 
-type CreateLeadArgs = {
-  email: string
-  isWinner: boolean
-  prize: string | null
-}
-
-type CreateLeadMutation = (lead: CreateLeadArgs) => Promise<unknown>
+type CreateLeadMutation = (lead: SlotLeadPayload) => Promise<unknown>
 
 const QUEUE_KEY = 'sos.slot.pending-leads.v1'
 
@@ -32,11 +26,7 @@ export async function persistSlotLead(
   lead: SlotLeadPayload,
 ) {
   try {
-    await createLead({
-      email: lead.email,
-      isWinner: lead.isWinner,
-      prize: lead.prize,
-    })
+    await createLead(lead)
     return 'saved' as const
   } catch {
     queueSlotLead(lead)
@@ -56,11 +46,7 @@ export async function flushQueuedSlotLeads(createLead: CreateLeadMutation) {
 
   for (const lead of queuedLeads) {
     try {
-      await createLead({
-        email: lead.email,
-        isWinner: lead.isWinner,
-        prize: lead.prize,
-      })
+      await createLead(lead)
       syncedCount += 1
     } catch {
       remainingLeads.push(lead)

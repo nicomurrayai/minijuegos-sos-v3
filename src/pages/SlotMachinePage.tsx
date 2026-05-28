@@ -10,6 +10,7 @@ import { useMutation } from 'convex/react'
 import { Link } from 'react-router-dom'
 import { api } from '../../convex/_generated/api'
 import {
+  SLOT_DISABLED_EMAIL_FALLBACK,
   SLOT_GAME_ID,
   createLosingSymbolIds,
   getPrizeById,
@@ -51,6 +52,12 @@ const initialVisibleSymbols: SlotSymbolId[] = [
 
 const baseSpinDurationMs = 2360
 const reelStaggerMs = 320
+// Flip to true to restore the pre-game email capture flow.
+const SLOT_EMAIL_FORM_ENABLED = false
+const INITIAL_PLAYER_EMAIL = SLOT_EMAIL_FORM_ENABLED
+  ? ''
+  : SLOT_DISABLED_EMAIL_FALLBACK
+const INITIAL_EMAIL_MODAL_OPEN = SLOT_EMAIL_FORM_ENABLED
 
 function createIdleReel(symbolId: SlotSymbolId): ReelState {
   return {
@@ -112,10 +119,12 @@ function SlotMachinePage() {
   const [lastOutcome, setLastOutcome] = useState<SpinOutcome>('idle')
   const [resultPopup, setResultPopup] = useState<ResultPopup | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
-  const [playerEmail, setPlayerEmail] = useState('')
+  const [playerEmail, setPlayerEmail] = useState(INITIAL_PLAYER_EMAIL)
   const [emailDraft, setEmailDraft] = useState('')
   const [emailError, setEmailError] = useState('')
-  const [isEmailModalOpen, setIsEmailModalOpen] = useState(true)
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(
+    INITIAL_EMAIL_MODAL_OPEN,
+  )
   const [resultMessage, setResultMessage] = useState(
     'Tirá de la palanca para empezar.',
   )
@@ -156,10 +165,10 @@ function SlotMachinePage() {
       if (event.key === 'Escape') {
         setResultPopup(null)
         setSaveStatus('idle')
-        setPlayerEmail('')
+        setPlayerEmail(INITIAL_PLAYER_EMAIL)
         setEmailDraft('')
         setEmailError('')
-        setIsEmailModalOpen(true)
+        setIsEmailModalOpen(INITIAL_EMAIL_MODAL_OPEN)
         setLastOutcome('idle')
         setResultMessage('Tirá de la palanca para empezar.')
       }
@@ -185,10 +194,10 @@ function SlotMachinePage() {
   function dismissResultPopup() {
     setResultPopup(null)
     setSaveStatus('idle')
-    setPlayerEmail('')
+    setPlayerEmail(INITIAL_PLAYER_EMAIL)
     setEmailDraft('')
     setEmailError('')
-    setIsEmailModalOpen(true)
+    setIsEmailModalOpen(INITIAL_EMAIL_MODAL_OPEN)
     setLastOutcome('idle')
     setResultMessage('Tirá de la palanca para empezar.')
   }
@@ -282,12 +291,12 @@ function SlotMachinePage() {
       return
     }
 
-    if (!playerEmail) {
+    if (SLOT_EMAIL_FORM_ENABLED && !playerEmail) {
       setIsEmailModalOpen(true)
       return
     }
 
-    startSpin(playerEmail)
+    startSpin(playerEmail || SLOT_DISABLED_EMAIL_FALLBACK)
   }
 
   function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
@@ -500,7 +509,7 @@ function SlotMachinePage() {
         </div>
       </div>
 
-      {isEmailModalOpen && !resultPopup ? (
+      {SLOT_EMAIL_FORM_ENABLED && isEmailModalOpen && !resultPopup ? (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/66 px-5 py-8 backdrop-blur-[4px]">
           <form
             onSubmit={handleEmailSubmit}
